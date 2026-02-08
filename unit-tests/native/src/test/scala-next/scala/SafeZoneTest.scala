@@ -136,4 +136,13 @@ class SafeZoneTest {
       var a2 = allocate(sz, new A(a1)) 
     }
   }
+
+  @Test def `todo2`(): Unit = {
+    SafeZone { sz ?=>
+      case class DoubleWrapper(value: Double)
+      val kArraySize: Int          = 500000 // about 4Mb
+      // val array = alloc(new Array[DoubleWrapper^{sz}](kArraySize))
+      val array = allocate(sz, new Array[DoubleWrapper^{sz}](kArraySize))
+    }
+  }
 }
