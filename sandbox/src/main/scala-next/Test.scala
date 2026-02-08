@@ -38,7 +38,7 @@ object GCBenchBenchmark {
         if (iDepth <= 0) {
           alloc(new Node(null, null, 0, 0))
         } else {
-          alloc(new Node(makeTree(iDepth - 1), makeTree(iDepth - 1), 0, 0)) // fail
+          allocate(sz, new Node(makeTree(iDepth - 1), makeTree(iDepth - 1), 0, 0))
           // COMPILATION TEST
           // makeTree(iDepth - 1) // ok
           // COMPILATION TEST
