@@ -125,4 +125,13 @@ class SafeZoneTest {
       assertTrue(a0.v + a1.v == 1)
     }
   }
+
+  @Test def `todo`(): Unit = {
+    SafeZone { sz ?=>
+      case class A(a: A^{sz})
+      var a1 = alloc(new A(null))
+      // var a2 = alloc(new A(a1)) // fails
+      var a2 = allocate(sz, new A(a1)) 
+    }
+  }
 }
