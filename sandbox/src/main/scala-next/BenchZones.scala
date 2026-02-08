@@ -8,7 +8,7 @@ import scala.scalanative.memory.SafeZone._
 import scala.scalanative.runtime.SafeZoneAllocator.allocate
 
 
-object GCBenchBenchmark {
+object GCBenchBenchmarkZones {
   def run(input: String): Boolean = {
     SafeZone { sz ?=>
       class Node(var left: Node^{sz}, var right: Node^{sz}, var i: Int, var j: Int)
@@ -39,9 +39,6 @@ object GCBenchBenchmark {
           alloc(new Node(null, null, 0, 0))
         } else {
           allocate(sz, new Node(makeTree(iDepth - 1), makeTree(iDepth - 1), 0, 0))
-          // COMPILATION TEST
-          // makeTree(iDepth - 1) // ok
-          // COMPILATION TEST
         }
 
       def construction(depth: Int): Unit = {
@@ -79,10 +76,11 @@ object GCBenchBenchmark {
       populate(kLongLivedTreeDepth, longLivedTree)
 
       // // Create long-lived array, filling half of it
-      val array = alloc(new Array[Double](kArraySize))
+      case class DoubleWrapper(value: Double)
+      val array = allocate(sz, new Array[DoubleWrapper^{sz}](kArraySize))
       var i     = 0
       while (i < kArraySize / 2) {
-        array(i) = 1.0 / i
+        array(i) = alloc(new DoubleWrapper(1.0 / i))
         i += 1
       }
 
@@ -93,13 +91,12 @@ object GCBenchBenchmark {
       }
 
       // Return the result
-      longLivedTree != null && array(1000) == 1.0 / 1000
+      longLivedTree != null && array(1000).value == 1.0 / 1000
     }
   }
 
 }
 
-@main def TestExperimental() = {
-  println("Hi Alex!")
-  println(GCBenchBenchmark.run(""))
+@main def TestGCBenchBenchmarkZones() = {
+  BenchmarkRunner.runBenchmark("GCBench SafeZone", 5)(GCBenchBenchmarkZones.run)
 }
