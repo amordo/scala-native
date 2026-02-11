@@ -4,13 +4,15 @@ import scala.{Int, Double, Boolean, Unit, Array}
 import java.lang.String
 
 import scala.scalanative.memory.SafeZone
+import scala.scalanative.memory.SafeZoneTracing
 import scala.scalanative.memory.SafeZone._
 import scala.scalanative.runtime.SafeZoneAllocator.allocate
 
 
 object GCBenchBenchmarkZones {
   def run(input: String): Boolean = {
-    SafeZone { sz ?=>
+    SafeZoneTracing.init()
+    val res = SafeZone { sz ?=>
       class Node(var left: Node^{sz}, var right: Node^{sz}, var i: Int, var j: Int)
       val kStretchTreeDepth: Int   = 18 // about 16Mb
       val kLongLivedTreeDepth: Int = 16 // about 4Mb
@@ -93,10 +95,12 @@ object GCBenchBenchmarkZones {
       // Return the result
       longLivedTree != null && array(1000).value == 1.0 / 1000
     }
+    SafeZoneTracing.printStats()
+    res
   }
 
 }
 
 @main def TestGCBenchBenchmarkZones() = {
-  BenchmarkRunner.runBenchmark("GCBench SafeZone", 5)(GCBenchBenchmarkZones.run)
+  BenchmarkRunner.runBenchmark("GCBench SafeZone", 1)(GCBenchBenchmarkZones.run)
 }
