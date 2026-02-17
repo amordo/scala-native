@@ -40,7 +40,7 @@ object SafeZoneTracing {
   def reset(): Unit = Impl.zone_tracing_reset()
   
   @extern
-  @define("__SCALANATIVE_MEMORY_SAFEZONE")
+  // @define("__SCALANATIVE_MEMORY_SAFEZONE")
   private object Impl {
     @name("zone_tracing_init")
     def zone_tracing_init(): Unit = extern

@@ -54,7 +54,7 @@ MemoryPage *MemoryPool_claim(MemoryPool *pool) {
     result->next = NULL;
     result->offset = 0;
     // Notify the GC that the page is in use.
-    scalanative_GC_add_roots(result->start, result->start + result->size);
+    scalanative_add_roots(result->start, result->start + result->size);
     
     ZONE_TRACE_INC(zone_tracing_stats.pool_claim_count);
     ZONE_TRACE_END(zone_tracing_stats.pool_claim_time_ns);
