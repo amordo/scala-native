@@ -6,6 +6,28 @@
 #include "../gc/shared/MemoryMap.h"
 #include "ZoneTracing.h"
 
+static size_t memorypool_page_size = 0;
+
+size_t MemoryPool_getPageSize() {
+    if (memorypool_page_size == 0) {
+        char *env_page_size = getenv("SAFEZONE_PAGE_SIZE");
+        if (env_page_size != NULL) {
+            long long parsed = atoll(env_page_size);
+            if (parsed > 0 && parsed <= (1LL << 32)) {
+                memorypool_page_size = (size_t)parsed;
+                fprintf(stderr, "[SafeZone] Using page size from environment: %zu bytes\n", memorypool_page_size);
+            } else {
+                fprintf(stderr, "[SafeZone] Invalid SAFEZONE_PAGE_SIZE '%s', using default %d bytes\n", 
+                        env_page_size, MEMORYPOOL_PAGE_SIZE);
+                memorypool_page_size = MEMORYPOOL_PAGE_SIZE;
+            }
+        } else {
+            memorypool_page_size = MEMORYPOOL_PAGE_SIZE;
+        }
+    }
+    return memorypool_page_size;
+}
+
 MemoryPool *MemoryPool_open() {
     MemoryPool *pool = malloc(sizeof(MemoryPool));
     pool->chunkPageCount = MEMORYPOOL_MIN_CHUNK_COUNT;

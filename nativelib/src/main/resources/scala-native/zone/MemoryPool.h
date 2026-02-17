@@ -23,6 +23,14 @@ typedef struct _MemoryPool {
 #define MEMORYPOOL_MAX_CHUNK_COUNT 512
 
 /**
+ * @brief Get the configured page size. Reads from SAFEZONE_PAGE_SIZE
+ * environment variable, or uses default 8192 bytes.
+ *
+ * @return size_t The page size in bytes.
+ */
+size_t MemoryPool_getPageSize();
+
+/**
  * @brief Open an empry memory pool. A memory pool consists of a linked list
  * of chunks. Each chunk is divided into fixed-size pages.
  *

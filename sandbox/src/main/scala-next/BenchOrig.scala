@@ -88,7 +88,7 @@ object GCBenchBenchmarkOrig {
   }
 }
 
-object BenchmarkRunner {
+object BenchmarkRunnerOld {
   def runBenchmark(name: String, numRuns: Int)(runFn: String => Boolean): Unit = {
     val times = new Array[Double](numRuns)
     
