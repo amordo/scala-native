@@ -4,7 +4,7 @@ import scala.{Int, Double, Boolean, Unit, Array}
 import java.lang.String
 
 import scala.scalanative.memory.SafeZone
-import scala.scalanative.memory.SafeZoneTracing
+// import scala.scalanative.memory.SafeZoneTracing
 import scala.scalanative.memory.SafeZone._
 import scala.scalanative.runtime.SafeZoneAllocator.allocate
 
@@ -187,7 +187,7 @@ object GCBenchTreeWalking {
 
 object SafeZoneBenchStandard {
   def run(input: String): Boolean = {
-    SafeZoneTracing.init()
+    // SafeZoneTracing.init()
     val res = SafeZone { sz ?=>
       class Node(var left: Node^{sz}, var right: Node^{sz}, var i: Int, var j: Int)
       val kStretchTreeDepth: Int   = 18
@@ -259,14 +259,14 @@ object SafeZoneBenchStandard {
 
       longLivedTree != null && array(1000).value == 1.0 / 1000
     }
-    SafeZoneTracing.printStats()
+    // SafeZoneTracing.printStats()
     res
   }
 }
 
 object SafeZoneBenchTreeWalking {
   def run(input: String): Boolean = {
-    SafeZoneTracing.init()
+    // SafeZoneTracing.init()
     val res = SafeZone { sz ?=>
       class Node(var left: Node^{sz}, var right: Node^{sz}, var i: Int, var j: Int)
       val kStretchTreeDepth: Int   = 18
@@ -348,7 +348,7 @@ object SafeZoneBenchTreeWalking {
 
       longLivedTree != null && array(1000).value == 1.0 / 1000
     }
-    SafeZoneTracing.printStats()
+    // SafeZoneTracing.printStats()
     res
   }
 }
