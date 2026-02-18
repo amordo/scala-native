@@ -4,7 +4,6 @@
 #include "MemoryPool.h"
 #include "../gc/shared/GCScalaNative.h"
 #include "../gc/shared/MemoryMap.h"
-#include "ZoneTracing.h"
 
 MemoryPool *MemoryPool_open() {
     MemoryPool *pool = malloc(sizeof(MemoryPool));
@@ -15,8 +14,6 @@ MemoryPool *MemoryPool_open() {
 }
 
 void MemoryPool_alloc_chunk(MemoryPool *pool) {
-    ZONE_TRACE_INC(zone_tracing_stats.chunk_alloc_count);
-    
     MemoryChunk *chunk = malloc(sizeof(MemoryChunk));
     chunk->size = pool->chunkPageCount * MEMORYPOOL_PAGE_SIZE;
     chunk->offset = 0;
@@ -29,8 +26,6 @@ void MemoryPool_alloc_chunk(MemoryPool *pool) {
 }
 
 void MemoryPool_alloc_page(MemoryPool *pool) {
-    ZONE_TRACE_INC(zone_tracing_stats.page_alloc_count);
-    
     if (pool->chunk == NULL || pool->chunk->offset >= pool->chunk->size) {
         MemoryPool_alloc_chunk(pool);
     }
@@ -44,8 +39,6 @@ void MemoryPool_alloc_page(MemoryPool *pool) {
 }
 
 MemoryPage *MemoryPool_claim(MemoryPool *pool) {
-    ZONE_TRACE_START();
-    
     if (pool->page == NULL) {
         MemoryPool_alloc_page(pool);
     }
@@ -55,16 +48,10 @@ MemoryPage *MemoryPool_claim(MemoryPool *pool) {
     result->offset = 0;
     // Notify the GC that the page is in use.
     scalanative_add_roots(result->start, result->start + result->size);
-    
-    ZONE_TRACE_INC(zone_tracing_stats.pool_claim_count);
-    ZONE_TRACE_END(zone_tracing_stats.pool_claim_time_ns);
-    
     return result;
 }
 
 void MemoryPool_reclaim(MemoryPool *pool, MemoryPage *head) {
-    ZONE_TRACE_START();
-    
     // Notify the GC that the pages are no longer in use.
     MemoryPage *page = head, *tail = NULL;
     while (page != NULL) {
@@ -77,9 +64,6 @@ void MemoryPool_reclaim(MemoryPool *pool, MemoryPage *head) {
         tail->next = pool->page;
         pool->page = head;
     }
-    
-    ZONE_TRACE_INC(zone_tracing_stats.pool_reclaim_count);
-    ZONE_TRACE_END(zone_tracing_stats.pool_reclaim_time_ns);
 }
 
 void MemoryPool_close(MemoryPool *pool) {
