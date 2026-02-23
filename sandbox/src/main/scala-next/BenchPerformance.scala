@@ -427,7 +427,7 @@ object SafeZoneBenchTreeWalking {
 
 @main def TestSafeZoneStandard() = {
   println("Running SafeZone standard benchmarks...")
-  BenchmarkRunner.runBenchmark("SafeZone - Standard", 1)(SafeZoneBenchStandard.run)
+  BenchmarkRunner.runBenchmark("SafeZone - Standard", 2)(SafeZoneBenchStandard.run)
 }
 
 @main def TestSafeZoneTreeWalking() = {
