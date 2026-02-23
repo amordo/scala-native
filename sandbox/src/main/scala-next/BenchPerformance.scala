@@ -243,11 +243,13 @@ object SafeZoneBenchStandard {
       longLivedTree = alloc(new Node(null, null, 0, 0))
       populate(kLongLivedTreeDepth, longLivedTree)
 
-      case class DoubleWrapper(value: Double)
-      val array = allocate(sz, new Array[DoubleWrapper^{sz}](kArraySize))
+      // case class DoubleWrapper(value: Double)
+      // val array = allocate(sz, new Array[DoubleWrapper^{sz}](kArraySize))
+      val array = allocate(sz, new Array[Double](kArraySize))
       var i     = 0
       while (i < kArraySize / 2) {
-        array(i) = alloc(new DoubleWrapper(1.0 / i))
+        // array(i) = alloc(new DoubleWrapper(1.0 / i))
+        array(i) = 1.0 / i
         i += 1
       }
 
@@ -257,7 +259,8 @@ object SafeZoneBenchStandard {
         i += 2
       }
 
-      longLivedTree != null && array(1000).value == 1.0 / 1000
+      // longLivedTree != null && array(1000).value == 1.0 / 1000
+      longLivedTree != null && array(1000) == 1.0 / 1000
     }
     // SafeZoneTracing.printStats()
     res
@@ -402,7 +405,7 @@ object SafeZoneBenchTreeWalking {
 
 @main def TestSafeZoneStandard() = {
   println("Running SafeZone standard benchmarks...")
-  BenchmarkRunner.runBenchmark("SafeZone - Standard", 20)(SafeZoneBenchStandard.run)
+  BenchmarkRunner.runBenchmark("SafeZone - Standard", 1)(SafeZoneBenchStandard.run)
 }
 
 @main def TestSafeZoneTreeWalking() = {
