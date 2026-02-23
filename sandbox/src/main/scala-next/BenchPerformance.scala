@@ -188,8 +188,8 @@ object GCBenchTreeWalking {
 object SafeZoneBenchStandard {
   def run(input: String): Boolean = {
     // SafeZoneTracing.init()
-    val res = SafeZone { sz ?=>
-      class Node(var left: Node^{sz}, var right: Node^{sz}, var i: Int, var j: Int)
+    val res = SafeZone { outerSz ?=>
+      // Constants
       val kStretchTreeDepth: Int   = 18
       val kLongLivedTreeDepth: Int = 16
       val kArraySize: Int          = 500000
@@ -199,7 +199,23 @@ object SafeZoneBenchStandard {
       def treeSize(i: Int): Int = ((1 << (i + 1)) - 1)
       def numIters(i: Int): Int = 2 * treeSize(kStretchTreeDepth) / treeSize(i)
 
-      def populate(iDepth: Int, thisNode: Node^{sz}): Unit =
+      // Stretch tree in inner zone (short-lived, reclaimed immediately)
+      SafeZone { stretchSz ?=>
+        class StretchNode(var left: StretchNode^{stretchSz}, var right: StretchNode^{stretchSz}, var i: Int, var j: Int)
+        def makeStretchTree(iDepth: Int): StretchNode^{stretchSz} =
+          if (iDepth <= 0) {
+            alloc(new StretchNode(null, null, 0, 0))
+          } else {
+            allocate(stretchSz, new StretchNode(makeStretchTree(iDepth - 1), makeStretchTree(iDepth - 1), 0, 0))
+          }
+        val tempTree = makeStretchTree(kStretchTreeDepth)
+        // tempTree is reclaimed when this inner zone exits
+      }
+
+      // Long-lived objects in outer zone
+      class Node(var left: Node^{outerSz}, var right: Node^{outerSz}, var i: Int, var j: Int)
+      
+      def populate(iDepth: Int, thisNode: Node^{outerSz}): Unit =
         if (iDepth > 0) {
           thisNode.left = alloc(new Node(null, null, 0, 0))
           thisNode.right = alloc(new Node(null, null, 0, 0))
@@ -207,59 +223,60 @@ object SafeZoneBenchStandard {
           populate(iDepth - 1, thisNode.right)
         }
 
-      def makeTree(iDepth: Int): Node^{sz} =
-        if (iDepth <= 0) {
-          alloc(new Node(null, null, 0, 0))
-        } else {
-          allocate(sz, new Node(makeTree(iDepth - 1), makeTree(iDepth - 1), 0, 0))
-        }
-
-      def construction(depth: Int): Unit = {
-        var tempTree: Node^{sz} = null
-        val iNumIter: Int  = numIters(depth)
-
-        var i = 0
-        while (i < iNumIter) {
-          tempTree = alloc(new Node(null, null, 0, 0))
-          populate(depth, tempTree)
-          tempTree = null
-          i += 1
-        }
-
-        i = 0
-        while (i < iNumIter) {
-          tempTree = makeTree(depth)
-          tempTree = null
-          i += 1
-        }
-      }
-
-      var longLivedTree: Node^{sz} = null
-      var tempTree: Node^{sz}      = null
-
-      tempTree = makeTree(kStretchTreeDepth)
-      tempTree = null
-
-      longLivedTree = alloc(new Node(null, null, 0, 0))
+      val longLivedTree = alloc(new Node(null, null, 0, 0))
       populate(kLongLivedTreeDepth, longLivedTree)
 
-      // case class DoubleWrapper(value: Double)
-      // val array = allocate(sz, new Array[DoubleWrapper^{sz}](kArraySize))
-      val array = allocate(sz, new Array[Double](kArraySize))
-      var i     = 0
+      val array = allocate(outerSz, new Array[Double](kArraySize))
+      var i = 0
       while (i < kArraySize / 2) {
-        // array(i) = alloc(new DoubleWrapper(1.0 / i))
         array(i) = 1.0 / i
         i += 1
       }
 
+      // Construction with inner zones for each depth (short-lived trees reclaimed per iteration)
       i = kMinTreeDepth
       while (i <= kMaxTreeDepth) {
-        construction(i)
+        val depth = i
+        SafeZone { constructionSz ?=>
+          class TempNode(var left: TempNode^{constructionSz}, var right: TempNode^{constructionSz}, var i: Int, var j: Int)
+          
+          def populateTemp(iDepth: Int, thisNode: TempNode^{constructionSz}): Unit =
+            if (iDepth > 0) {
+              thisNode.left = alloc(new TempNode(null, null, 0, 0))
+              thisNode.right = alloc(new TempNode(null, null, 0, 0))
+              populateTemp(iDepth - 1, thisNode.left)
+              populateTemp(iDepth - 1, thisNode.right)
+            }
+
+          def makeTempTree(iDepth: Int): TempNode^{constructionSz} =
+            if (iDepth <= 0) {
+              alloc(new TempNode(null, null, 0, 0))
+            } else {
+              allocate(constructionSz, new TempNode(makeTempTree(iDepth - 1), makeTempTree(iDepth - 1), 0, 0))
+            }
+          
+          var tempTree: TempNode^{constructionSz} = null
+          val iNumIter: Int = numIters(depth)
+
+          var j = 0
+          while (j < iNumIter) {
+            tempTree = alloc(new TempNode(null, null, 0, 0))
+            populateTemp(depth, tempTree)
+            tempTree = null
+            j += 1
+          }
+
+          j = 0
+          while (j < iNumIter) {
+            tempTree = makeTempTree(depth)
+            tempTree = null
+            j += 1
+          }
+          // All temporary trees reclaimed when this zone exits
+        }
         i += 2
       }
 
-      // longLivedTree != null && array(1000).value == 1.0 / 1000
       longLivedTree != null && array(1000) == 1.0 / 1000
     }
     // SafeZoneTracing.printStats()
