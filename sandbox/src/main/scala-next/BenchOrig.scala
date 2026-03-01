@@ -127,5 +127,5 @@ object BenchmarkRunner {
 }
 
 @main def TestGCBenchBenchmarkOriginal() = {
-  BenchmarkRunner.runBenchmark("GCBench Original", 5)(GCBenchBenchmarkOrig.run)
+  GCBenchBenchmarkOrig.run("")
 }
