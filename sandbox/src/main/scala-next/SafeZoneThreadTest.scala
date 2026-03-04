@@ -19,7 +19,7 @@
  * - Correctness Under Parallelism: Results match sequential semantics
  * 
  * Implementation Note:
- * - Uses Future-based parallelism (Scala Native doesn't support .par on collections)
+ * - Uses parallel collections (.par) for clean parallelism
  * - Each parallel task gets its own thread-local SafeZone
  * - Atomic operations used for shared state where needed
  * 
@@ -32,14 +32,10 @@
 import scala.language.experimental.captureChecking
 
 import scala.{Int, Long, Unit}
-import java.util.concurrent.{Executors, CountDownLatch, TimeUnit}
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
-import scala.concurrent.{Future, ExecutionContext, Await}
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration._
 import scala.scalanative.memory.SafeZone
 import scala.util.Random
-
 import scala.collection.parallel.CollectionConverters._
 
 // Helper class for SafeZone allocation tests
@@ -109,28 +105,21 @@ object SafeZoneThreadTest {
   def threadLocalZonesAreIndependent(): Unit = {
     val numThreads = 4
     val allocsPerThread = 100000
-    val executor = Executors.newFixedThreadPool(numThreads)
     
-    val futures = (0 until numThreads).map { threadId =>
-      Future {
-        SafeZone { sz ?=>
-          var sum = 0L
-          (0 until allocsPerThread).foreach { i =>
-            val obj = sz.alloc(new Counter(i))
-            sum += obj.value
-          }
-          sum
+    val results = (0 until numThreads).par.map { threadId =>
+      SafeZone { sz ?=>
+        var sum = 0L
+        (0 until allocsPerThread).foreach { i =>
+          val obj = sz.alloc(new Counter(i))
+          sum += obj.value
         }
-      }(ExecutionContext.fromExecutor(executor))
-    }
-    
-    val results = Await.result(Future.sequence(futures), 10.seconds)
+        sum
+      }
+    }.seq
     
     // Each thread should compute same sum independently
     val expected = (0L until allocsPerThread).sum
     results.foreach(r => assertEquals(expected, r))
-    
-    executor.shutdown()
     
     println(s"✓ Thread-local zones test passed!")
     println(s"  Threads: $numThreads")
@@ -150,33 +139,20 @@ object SafeZoneThreadTest {
     (0 until iterations).foreach { iter =>
       val data = Array.fill(dataSize)(Random.nextInt(1000))
       
-      // Use Future-based parallelism instead of .par (not available in Scala Native)
-      val numThreads = 4
-      val executor = Executors.newFixedThreadPool(numThreads)
-      val chunkSize = (dataSize + numThreads - 1) / numThreads
-      
-      val futures = data.grouped(chunkSize).toArray.map { chunk =>
-        Future {
-          chunk.map { value =>
-            SafeZone { sz ?=>
-              // Heavy allocation to stress memory system
-              val arr = new OffHeapArray[Int](100)(using sz)
-              (0 until 100).foreach(i => arr(i) = value + i)
-              arr.sum
-            }
-          }
-        }(ExecutionContext.fromExecutor(executor))
-      }
-      
-      val results = Await.result(Future.sequence(futures.toSeq), 30.seconds).flatten.toArray
+      val results = data.par.map { value =>
+        SafeZone { sz ?=>
+          // Heavy allocation to stress memory system
+          val arr = new OffHeapArray[Int](100)(using sz)
+          (0 until 100).foreach(i => arr(i) = value + i)
+          arr.sum
+        }
+      }.seq.toArray
       
       // Verify correctness
       data.zip(results).foreach { case (input, output) =>
         val expected = (0 until 100).map(input + _).sum
         assertEquals(expected.toLong, output.toLong)
       }
-      
-      executor.shutdown()
       
       // if ((iter + 1) % 10 == 0) {
       //   println(s"  Completed ${iter + 1}/$iterations iterations")
@@ -239,34 +215,26 @@ object SafeZoneThreadTest {
     val processedCount = new AtomicLong(0)
     val sumValues = new AtomicReference[Double](0.0)
     
-    // Use Future-based parallelism instead of .par
     val batches = events.grouped(batchSize).toArray
-    val numThreads = 4
-    val executor = Executors.newFixedThreadPool(numThreads)
     
-    val futures = batches.map { batch =>
-      Future {
-        SafeZone { batchZone ?=>  // Zone per batch (thread-local)
-          batch.foreach { event =>
-            SafeZone { eventZone ?=>  // Nested zone per event
-              val processed = eventZone.alloc(new Counter(event.id))
-              processedCount.incrementAndGet()
-              
-              // Atomic update for sumValues
-              var done = false
-              while (!done) {
-                val current = sumValues.get()
-                val updated = current + event.value
-                done = sumValues.compareAndSet(current, updated)
-              }
-            } // Frequent small cleanups
-          }
+    batches.par.foreach { batch =>
+      SafeZone { batchZone ?=>  // Zone per batch (thread-local)
+        batch.foreach { event =>
+          SafeZone { eventZone ?=>  // Nested zone per event
+            val processed = eventZone.alloc(new Counter(event.id))
+            processedCount.incrementAndGet()
+            
+            // Atomic update for sumValues
+            var done = false
+            while (!done) {
+              val current = sumValues.get()
+              val updated = current + event.value
+              done = sumValues.compareAndSet(current, updated)
+            }
+          } // Frequent small cleanups
         }
-      }(ExecutionContext.fromExecutor(executor))
+      }
     }
-    
-    Await.result(Future.sequence(futures.toSeq), 60.seconds)
-    executor.shutdown()
     
     assertEquals(totalEvents.toLong, processedCount.get())
     val expectedSum = (0 until totalEvents).map(_ * 1.5).sum
@@ -295,17 +263,17 @@ object SafeZoneThreadTest {
     threadLocalZonesAreIndependent()
     println()
     
-    // println("[3/6] Running stress test for race conditions...")
-    // stressTestParallelAllocation()
-    // println()
+    println("[3/6] Running stress test for race conditions...")
+    stressTestParallelAllocation()
+    println()
     
     println("[4/6] Testing zone lifetime vs thread lifetime...")
     zoneOutlivesThreadWork()
     println()
     
-    // println("[5/6] Testing nested zones with batch processing...")
-    // nestedZonesBatchProcessing()
-    // println()
+    println("[5/6] Testing nested zones with batch processing...")
+    nestedZonesBatchProcessing()
+    println()
     
     println("=" * 60)
     println("✓ All SafeZone thread safety tests passed!")
