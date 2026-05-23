@@ -730,6 +730,8 @@ object Build {
   lazy val sandbox =
     MultiScalaProject("sandbox")
       .settings(
+        // libraryDependencies += "org.scala-lang.modules" %%% "scala-parallel-collections" % "1.2.0",
+        libraryDependencies += "org.scala-lang.modules" %%% "scala-parallel-collections" % "1.2.0+5-314fb9f3+20260523-2125-SNAPSHOT",
         noJavaReleaseSettings(Compile),
         noJavaReleaseSettings(Test)
       )
