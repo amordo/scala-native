@@ -11,23 +11,15 @@
  * Broom proposes region-based (zone) memory management: allocate each
  * epoch's data in a dedicated region and free it in O(1) when the epoch ends.
  *
- * This benchmark compares three approaches on a numerical data pipeline:
+ * This benchmark compares four approaches on a numerical data pipeline:
  *   1. Sequential  – standard Scala collections (Vector)
  *   2. Parallel    – on-heap parallel collections (ParVector)
- *   3. Zone Par    – off-heap parallel collections (ZoneParVector)
+ *   3. Zone Seq    – off-heap sequential using Zones and manual allocation
+ *   4. Zone Par    – off-heap parallel collections (ZoneParVector)
  *
  * Pipeline per epoch:  generate → map (transform) → filter → reduce
  *
- * Run the individual entrypoints with:
- *   sbt "broom/runMain benchmark.SinglePassSequentialBroomBenchmark [dataSize]"
- *   sbt "broom/runMain benchmark.SinglePassParallelBroomBenchmark [dataSize]"
- *   sbt "broom/runMain benchmark.SinglePassZoneParBroomBenchmark [dataSize]"
- *   sbt "broom/runMain benchmark.MultiEpochSequentialBroomBenchmark [dataSize] [epochs]"
- *   sbt "broom/runMain benchmark.MultiEpochParallelBroomBenchmark [dataSize] [epochs]"
- *   sbt "broom/runMain benchmark.MultiEpochZoneParBroomBenchmark [dataSize] [epochs]"
- *   sbt "broom/runMain benchmark.AggregationSequentialBroomBenchmark [dataSize]"
- *   sbt "broom/runMain benchmark.AggregationParallelBroomBenchmark [dataSize]"
- *   sbt "broom/runMain benchmark.AggregationZoneParBroomBenchmark [dataSize]"
+ * (input for all - [dataSize]; for epochs - [dataSize] [epochs])
  */
 
 package benchmark
@@ -55,6 +47,11 @@ object BroomBenchmarkSupport {
 
   def rawInput(dataSize: Int): Array[Long] =
     Array.tabulate(dataSize)(i => i.toLong + 1L)
+
+  def dataSizesFromArgs(args: Array[String]): Seq[Int] =
+    if (args.length > 0) Seq(args(0).toInt)
+    // else (500 to 3000 by 500)
+    else (1_000_000 to 6_000_000 by 1_000_000)
 
   // ═══════════════════════════════════════════════════════════════════
   //  1.  Single-pass pipeline:  map → filter → reduce
@@ -268,8 +265,11 @@ object BroomBenchmarkSupport {
       i += 1
     }
 
-    // print individual run times
-    println("    runs: " + times.zipWithIndex.map { case (t, idx) => f"${idx + 1}%2d:${ms(t)}" }.mkString("  "))
+    // print individual run times, one per row
+    println("    runs:")
+    times.zipWithIndex.foreach { case (t, idx) =>
+      println(f"      ${idx + 1}%2d:${ms(t)}")
+    }
 
     val sorted = times.sorted
     val median = sorted(sorted.length / 2)
@@ -277,8 +277,8 @@ object BroomBenchmarkSupport {
     val min    = sorted.head
     val max    = sorted.last
 
-    println(f"  $label%-14s  median=${ms(median)}%8s  mean=${ms(mean)}%8s  " +
-            f"min=${ms(min)}%8s  max=${ms(max)}%8s  (checksum=$checksum)")
+    // println(f"  $label%-14s  median=${ms(median)}%8s  mean=${ms(mean)}%8s  " +
+    //         f"min=${ms(min)}%8s  max=${ms(max)}%8s  (checksum=$checksum)")
   }
 
   private def ms(nanos: Long): String = f"${nanos / 1e6}%.1f ms"
@@ -288,15 +288,16 @@ object SinglePassSequentialBroomBenchmark {
   import BroomBenchmarkSupport._
 
   def main(args: Array[String]): Unit = {
-    val dataSize = if (args.length > 0) args(0).toInt else DefaultDataSize
+    val sizes = dataSizesFromArgs(args)
+    for (dataSize <- sizes) {
+      banner("Broom-Inspired Single-Pass Pipeline Benchmark")
+      println(s"  data size : $dataSize elements")
+      println()
 
-    banner("Broom-Inspired Single-Pass Pipeline Benchmark")
-    println(s"  data size : $dataSize elements")
-    println()
+      val input = rawInput(dataSize)
 
-    val input = rawInput(dataSize)
-
-    runBenchmark("Sequential", WarmupRuns, MeasuredRuns)(pipelineSequential(input))
+      runBenchmark("Sequential", WarmupRuns, MeasuredRuns)(pipelineSequential(input))
+    }
   }
 }
 
@@ -304,15 +305,16 @@ object SinglePassParallelBroomBenchmark {
   import BroomBenchmarkSupport._
 
   def main(args: Array[String]): Unit = {
-    val dataSize = if (args.length > 0) args(0).toInt else DefaultDataSize
+    val sizes = dataSizesFromArgs(args)
+    for (dataSize <- sizes) {
+      banner("Broom-Inspired Single-Pass Pipeline Benchmark")
+      println(s"  data size : $dataSize elements")
+      println()
 
-    banner("Broom-Inspired Single-Pass Pipeline Benchmark")
-    println(s"  data size : $dataSize elements")
-    println()
+      val input = rawInput(dataSize)
 
-    val input = rawInput(dataSize)
-
-    runBenchmark("Parallel", WarmupRuns, MeasuredRuns)(pipelineParallel(input))
+      runBenchmark("Parallel", WarmupRuns, MeasuredRuns)(pipelineParallel(input))
+    }
   }
 }
 
@@ -320,15 +322,16 @@ object SinglePassZoneSequentialBroomBenchmark {
   import BroomBenchmarkSupport._
 
   def main(args: Array[String]): Unit = {
-    val dataSize = if (args.length > 0) args(0).toInt else DefaultDataSize
+    val sizes = dataSizesFromArgs(args)
+    for (dataSize <- sizes) {
+      banner("Broom-Inspired Single-Pass Pipeline Benchmark (Zone Sequential)")
+      println(s"  data size : $dataSize elements")
+      println()
 
-    banner("Broom-Inspired Single-Pass Pipeline Benchmark (Zone Sequential)")
-    println(s"  data size : $dataSize elements")
-    println()
+      val input = rawInput(dataSize)
 
-    val input = rawInput(dataSize)
-
-    runBenchmark("Zone Seq", WarmupRuns, MeasuredRuns)(pipelineZoneSequential(input))
+      runBenchmark("Zone Seq", WarmupRuns, MeasuredRuns)(pipelineZoneSequential(input))
+    }
   }
 }
 
@@ -336,15 +339,36 @@ object SinglePassZoneParBroomBenchmark {
   import BroomBenchmarkSupport._
 
   def main(args: Array[String]): Unit = {
-    val dataSize = if (args.length > 0) args(0).toInt else DefaultDataSize
+    val sizes = dataSizesFromArgs(args)
+    for (dataSize <- sizes) {
+      banner("Broom-Inspired Single-Pass Pipeline Benchmark")
+      println(s"  data size : $dataSize elements")
+      println()
 
-    banner("Broom-Inspired Single-Pass Pipeline Benchmark")
-    println(s"  data size : $dataSize elements")
-    println()
+      val input = rawInput(dataSize)
 
-    val input = rawInput(dataSize)
+      runBenchmark("Zone Par", WarmupRuns, MeasuredRuns)(pipelineZonePar(input))
+    }
+  }
+}
 
-    runBenchmark("Zone Par", WarmupRuns, MeasuredRuns)(pipelineZonePar(input))
+object SinglePassCombinedBroomBenchmark {
+  import BroomBenchmarkSupport._
+
+  def main(args: Array[String]): Unit = {
+    val sizes = dataSizesFromArgs(args)
+    for (dataSize <- sizes) {
+      banner("Broom-Inspired Single-Pass Pipeline Benchmark")
+      println(s"  data size : $dataSize elements")
+      println()
+
+      val input = rawInput(dataSize)
+
+      runBenchmark("Sequential", WarmupRuns, MeasuredRuns)(pipelineSequential(input))
+      runBenchmark("Parallel", WarmupRuns, MeasuredRuns)(pipelineParallel(input))
+      runBenchmark("Zone Seq", WarmupRuns, MeasuredRuns)(pipelineZoneSequential(input))
+      runBenchmark("Zone Par", WarmupRuns, MeasuredRuns)(pipelineZonePar(input))
+    }
   }
 }
 
@@ -352,17 +376,18 @@ object MultiEpochSequentialBroomBenchmark {
   import BroomBenchmarkSupport._
 
   def main(args: Array[String]): Unit = {
-    val dataSize = if (args.length > 0) args(0).toInt else DefaultDataSize
+    val sizes = dataSizesFromArgs(args)
     val epochs   = if (args.length > 1) args(1).toInt else DefaultEpochs
+    for (dataSize <- sizes) {
+      banner("Broom-Inspired Multi-Epoch Pipeline Benchmark")
+      println(s"  data size : $dataSize elements")
+      println(s"  epochs    : $epochs")
+      println()
 
-    banner("Broom-Inspired Multi-Epoch Pipeline Benchmark")
-    println(s"  data size : $dataSize elements")
-    println(s"  epochs    : $epochs")
-    println()
+      val input = rawInput(dataSize)
 
-    val input = rawInput(dataSize)
-
-    runBenchmark("Sequential", WarmupRuns, MeasuredRuns)(epochsSequential(input, epochs))
+      runBenchmark("Sequential", WarmupRuns, MeasuredRuns)(epochsSequential(input, epochs))
+    }
   }
 }
 
@@ -370,17 +395,18 @@ object MultiEpochParallelBroomBenchmark {
   import BroomBenchmarkSupport._
 
   def main(args: Array[String]): Unit = {
-    val dataSize = if (args.length > 0) args(0).toInt else DefaultDataSize
+    val sizes = dataSizesFromArgs(args)
     val epochs   = if (args.length > 1) args(1).toInt else DefaultEpochs
+    for (dataSize <- sizes) {
+      banner("Broom-Inspired Multi-Epoch Pipeline Benchmark")
+      println(s"  data size : $dataSize elements")
+      println(s"  epochs    : $epochs")
+      println()
 
-    banner("Broom-Inspired Multi-Epoch Pipeline Benchmark")
-    println(s"  data size : $dataSize elements")
-    println(s"  epochs    : $epochs")
-    println()
+      val input = rawInput(dataSize)
 
-    val input = rawInput(dataSize)
-
-    runBenchmark("Parallel",   WarmupRuns, MeasuredRuns)(epochsParallel(input, epochs))
+      runBenchmark("Parallel",   WarmupRuns, MeasuredRuns)(epochsParallel(input, epochs))
+    }
   }
 }
 
@@ -388,17 +414,18 @@ object MultiEpochZoneSequentialBroomBenchmark {
   import BroomBenchmarkSupport._
 
   def main(args: Array[String]): Unit = {
-    val dataSize = if (args.length > 0) args(0).toInt else DefaultDataSize
+    val sizes = dataSizesFromArgs(args)
     val epochs   = if (args.length > 1) args(1).toInt else DefaultEpochs
+    for (dataSize <- sizes) {
+      banner("Broom-Inspired Multi-Epoch Pipeline Benchmark (Zone Sequential)")
+      println(s"  data size : $dataSize elements")
+      println(s"  epochs    : $epochs")
+      println()
 
-    banner("Broom-Inspired Multi-Epoch Pipeline Benchmark (Zone Sequential)")
-    println(s"  data size : $dataSize elements")
-    println(s"  epochs    : $epochs")
-    println()
+      val input = rawInput(dataSize)
 
-    val input = rawInput(dataSize)
-
-    runBenchmark("Zone Seq", WarmupRuns, MeasuredRuns)(epochsZoneSequential(input, epochs))
+      runBenchmark("Zone Seq", WarmupRuns, MeasuredRuns)(epochsZoneSequential(input, epochs))
+    }
   }
 }
 
@@ -406,19 +433,20 @@ object MultiEpochZoneParBroomBenchmark {
   import BroomBenchmarkSupport._
 
   def main(args: Array[String]): Unit = {
-    val dataSize = if (args.length > 0) args(0).toInt else DefaultDataSize
+    val sizes = dataSizesFromArgs(args)
     val epochs   = if (args.length > 1) args(1).toInt else DefaultEpochs
+    for (dataSize <- sizes) {
+      banner("Broom-Inspired Multi-Epoch Pipeline Benchmark")
+      println(s"  data size : $dataSize elements")
+      println(s"  epochs    : $epochs")
+      println()
 
-    banner("Broom-Inspired Multi-Epoch Pipeline Benchmark")
-    println(s"  data size : $dataSize elements")
-    println(s"  epochs    : $epochs")
-    println()
+      val input = rawInput(dataSize)
 
-    val input = rawInput(dataSize)
-
-    // This is the core Broom scenario: each epoch creates temporaries
-    // that become garbage; zones free them in O(1) per epoch.
-    runBenchmark("Zone Par",   WarmupRuns, MeasuredRuns)(epochsZonePar(input, epochs))
+      // This is the core Broom scenario: each epoch creates temporaries
+      // that become garbage; zones free them in O(1) per epoch.
+      runBenchmark("Zone Par",   WarmupRuns, MeasuredRuns)(epochsZonePar(input, epochs))
+    }
   }
 }
 
@@ -426,15 +454,16 @@ object AggregationSequentialBroomBenchmark {
   import BroomBenchmarkSupport._
 
   def main(args: Array[String]): Unit = {
-    val dataSize = if (args.length > 0) args(0).toInt else DefaultDataSize
+    val sizes = dataSizesFromArgs(args)
+    for (dataSize <- sizes) {
+      banner("Broom-Inspired Aggregation Pipeline Benchmark")
+      println(s"  data size : $dataSize elements")
+      println()
 
-    banner("Broom-Inspired Aggregation Pipeline Benchmark")
-    println(s"  data size : $dataSize elements")
-    println()
+      val input = rawInput(dataSize)
 
-    val input = rawInput(dataSize)
-
-    runBenchmark("Sequential", WarmupRuns, MeasuredRuns)(aggregateSequential(input))
+      runBenchmark("Sequential", WarmupRuns, MeasuredRuns)(aggregateSequential(input))
+    }
   }
 }
 
@@ -442,15 +471,16 @@ object AggregationParallelBroomBenchmark {
   import BroomBenchmarkSupport._
 
   def main(args: Array[String]): Unit = {
-    val dataSize = if (args.length > 0) args(0).toInt else DefaultDataSize
+    val sizes = dataSizesFromArgs(args)
+    for (dataSize <- sizes) {
+      banner("Broom-Inspired Aggregation Pipeline Benchmark")
+      println(s"  data size : $dataSize elements")
+      println()
 
-    banner("Broom-Inspired Aggregation Pipeline Benchmark")
-    println(s"  data size : $dataSize elements")
-    println()
+      val input = rawInput(dataSize)
 
-    val input = rawInput(dataSize)
-
-    runBenchmark("Parallel", WarmupRuns, MeasuredRuns)(aggregateParallel(input))
+      runBenchmark("Parallel", WarmupRuns, MeasuredRuns)(aggregateParallel(input))
+    }
   }
 }
 
@@ -458,15 +488,16 @@ object AggregationZoneSequentialBroomBenchmark {
   import BroomBenchmarkSupport._
 
   def main(args: Array[String]): Unit = {
-    val dataSize = if (args.length > 0) args(0).toInt else DefaultDataSize
+    val sizes = dataSizesFromArgs(args)
+    for (dataSize <- sizes) {
+      banner("Broom-Inspired Aggregation Pipeline Benchmark (Zone Sequential)")
+      println(s"  data size : $dataSize elements")
+      println()
 
-    banner("Broom-Inspired Aggregation Pipeline Benchmark (Zone Sequential)")
-    println(s"  data size : $dataSize elements")
-    println()
+      val input = rawInput(dataSize)
 
-    val input = rawInput(dataSize)
-
-    runBenchmark("Zone Seq", WarmupRuns, MeasuredRuns)(aggregateZoneSequential(input))
+      runBenchmark("Zone Seq", WarmupRuns, MeasuredRuns)(aggregateZoneSequential(input))
+    }
   }
 }
 
@@ -474,14 +505,15 @@ object AggregationZoneParBroomBenchmark {
   import BroomBenchmarkSupport._
 
   def main(args: Array[String]): Unit = {
-    val dataSize = if (args.length > 0) args(0).toInt else DefaultDataSize
+    val sizes = dataSizesFromArgs(args)
+    for (dataSize <- sizes) {
+      banner("Broom-Inspired Aggregation Pipeline Benchmark")
+      println(s"  data size : $dataSize elements")
+      println()
 
-    banner("Broom-Inspired Aggregation Pipeline Benchmark")
-    println(s"  data size : $dataSize elements")
-    println()
+      val input = rawInput(dataSize)
 
-    val input = rawInput(dataSize)
-
-    runBenchmark("Zone Par", WarmupRuns, MeasuredRuns)(aggregateZonePar(input))
+      runBenchmark("Zone Par", WarmupRuns, MeasuredRuns)(aggregateZonePar(input))
+    }
   }
 }
